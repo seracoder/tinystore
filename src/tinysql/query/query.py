@@ -174,6 +174,26 @@ class SelectQuery:
         finally:
             self._limit = prev_limit
 
+    # ---- joins (Phase 4) ----
+    def join(
+        self,
+        model: type[Model],
+        *,
+        on: Any,
+        kind: str = "inner",
+    ) -> Any:
+        """Begin a multi-model join rooted at this query's model.
+
+        Returns a :class:`~tinysql.query.joins.JoinQuery`; the ``on`` condition
+        must compare two model field proxies, e.g.
+        ``Post.author_id == User.id``.
+        """
+        from .joins import JoinQuery
+
+        jq = JoinQuery(self.db, self.model_cls)
+        jq.join(model, on=on, kind=kind)
+        return jq
+
 
 class _AndAll(Expression):
     """Internal: AND-combine a list of expressions."""

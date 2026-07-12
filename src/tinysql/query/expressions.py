@@ -34,6 +34,7 @@ __all__ = [
     "In",
     "IsNotNull",
     "IsNull",
+    "JoinCondition",
     "Not",
     "NotIn",
     "Or",
@@ -103,12 +104,13 @@ _COMPARATORS: dict[str, tuple[Callable[[Any, Any], bool], str]] = {
 
 
 class Comparison(Expression):
-    __slots__ = ("field", "op", "value")
+    __slots__ = ("field", "model", "op", "value")
 
     def __init__(self, field: str, op: str, value: Any) -> None:
         self.field = field
         self.op = op
         self.value = value
+        self.model: Any = None
 
     def matches(self, row: dict[str, Any]) -> bool:
         actual = row.get(self.field)
@@ -137,11 +139,12 @@ class Comparison(Expression):
 
 
 class In(Expression):
-    __slots__ = ("field", "values")
+    __slots__ = ("field", "model", "values")
 
     def __init__(self, field: str, values: Any) -> None:
         self.field = field
         self.values = list(values)
+        self.model: Any = None
 
     def matches(self, row: dict[str, Any]) -> bool:
         actual = row.get(self.field)
@@ -151,11 +154,12 @@ class In(Expression):
 
 
 class NotIn(Expression):
-    __slots__ = ("field", "values")
+    __slots__ = ("field", "model", "values")
 
     def __init__(self, field: str, values: Any) -> None:
         self.field = field
         self.values = list(values)
+        self.model: Any = None
 
     def matches(self, row: dict[str, Any]) -> bool:
         actual = row.get(self.field)
@@ -165,11 +169,12 @@ class NotIn(Expression):
 
 
 class _StringOp(Expression):
-    __slots__ = ("field", "value")
+    __slots__ = ("field", "model", "value")
 
     def __init__(self, field: str, value: Any) -> None:
         self.field = field
         self.value = value
+        self.model: Any = None
 
     def _as_str(self, field: str, v: Any) -> str:
         if isinstance(v, str):
@@ -207,20 +212,22 @@ class EndsWith(_StringOp):
 
 
 class IsNull(Expression):
-    __slots__ = ("field",)
+    __slots__ = ("field", "model")
 
     def __init__(self, field: str) -> None:
         self.field = field
+        self.model: Any = None
 
     def matches(self, row: dict[str, Any]) -> bool:
         return row.get(self.field) is None
 
 
 class IsNotNull(Expression):
-    __slots__ = ("field",)
+    __slots__ = ("field", "model")
 
     def __init__(self, field: str) -> None:
         self.field = field
+        self.model: Any = None
 
     def matches(self, row: dict[str, Any]) -> bool:
         return row.get(self.field) is not None
@@ -256,6 +263,31 @@ class Not(Expression):
         return not self.expr.matches(row)
 
 
+class JoinCondition:
+    """A cross-table equality predicate produced by comparing two field proxies.
+
+    ``Post.author_id == User.id`` yields ``JoinCondition(Post, "author_id",
+    User, "id")``. The two sides are stored neutrally; the join resolves which
+    side is the newly-joined model and which is already in the result set.
+    """
+
+    __slots__ = ("a_field", "a_model", "b_field", "b_model")
+
+    def __init__(
+        self, a_model: Any, a_field: str, b_model: Any, b_field: str
+    ) -> None:
+        self.a_model = a_model
+        self.a_field = a_field
+        self.b_model = b_model
+        self.b_field = b_field
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.a_model.__name__}.{self.a_field} == "
+            f"{self.b_model.__name__}.{self.b_field}"
+        )
+
+
 class FieldProxy:
     """Returned by ``Model.field`` class access; builds expressions.
 
@@ -271,46 +303,74 @@ class FieldProxy:
         self.field = field
         self.field_type = field_type
 
-    def __eq__(self, value: Any) -> Comparison:  # type: ignore[override]
-        return Comparison(self.field, "eq", value)
+    def __eq__(self, value: Any) -> Any:
+        if isinstance(value, FieldProxy):
+            return JoinCondition(self.model, self.field, value.model, value.field)
+        cmp = Comparison(self.field, "eq", value)
+        cmp.model = self.model
+        return cmp
 
     def __ne__(self, value: Any) -> Comparison:  # type: ignore[override]
-        return Comparison(self.field, "ne", value)
+        cmp = Comparison(self.field, "ne", value)
+        cmp.model = self.model
+        return cmp
 
     def __lt__(self, value: Any) -> Comparison:
-        return Comparison(self.field, "lt", value)
+        cmp = Comparison(self.field, "lt", value)
+        cmp.model = self.model
+        return cmp
 
     def __le__(self, value: Any) -> Comparison:
-        return Comparison(self.field, "le", value)
+        cmp = Comparison(self.field, "le", value)
+        cmp.model = self.model
+        return cmp
 
     def __gt__(self, value: Any) -> Comparison:
-        return Comparison(self.field, "gt", value)
+        cmp = Comparison(self.field, "gt", value)
+        cmp.model = self.model
+        return cmp
 
     def __ge__(self, value: Any) -> Comparison:
-        return Comparison(self.field, "ge", value)
+        cmp = Comparison(self.field, "ge", value)
+        cmp.model = self.model
+        return cmp
 
     __hash__ = None  # type: ignore[assignment]
 
     def in_(self, values: Any) -> In:
-        return In(self.field, values)
+        expr = In(self.field, values)
+        expr.model = self.model
+        return expr
 
     def not_in(self, values: Any) -> NotIn:
-        return NotIn(self.field, values)
+        expr = NotIn(self.field, values)
+        expr.model = self.model
+        return expr
 
     def contains(self, value: Any) -> Contains:
-        return Contains(self.field, value)
+        expr = Contains(self.field, value)
+        expr.model = self.model
+        return expr
 
     def startswith(self, value: Any) -> StartsWith:
-        return StartsWith(self.field, value)
+        expr = StartsWith(self.field, value)
+        expr.model = self.model
+        return expr
 
     def endswith(self, value: Any) -> EndsWith:
-        return EndsWith(self.field, value)
+        expr = EndsWith(self.field, value)
+        expr.model = self.model
+        return expr
 
     def is_null(self) -> IsNull:
-        return IsNull(self.field)
+        expr = IsNull(self.field)
+        expr.model = self.model
+        return expr
 
     def is_not_null(self) -> IsNotNull:
-        return IsNotNull(self.field)
+        expr = IsNotNull(self.field)
+        expr.model = self.model
+        return expr
 
     def __repr__(self) -> str:
         return f"{self.model.__name__}.{self.field}"

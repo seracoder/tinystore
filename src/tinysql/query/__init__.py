@@ -10,11 +10,13 @@ from .expressions import (
     In,
     IsNotNull,
     IsNull,
+    JoinCondition,
     Not,
     NotIn,
     Or,
     StartsWith,
 )
+from .joins import JoinQuery, Row
 from .query import OrderClause, SelectQuery
 
 __all__ = [
@@ -27,10 +29,13 @@ __all__ = [
     "In",
     "IsNotNull",
     "IsNull",
+    "JoinCondition",
+    "JoinQuery",
     "Not",
     "NotIn",
     "Or",
     "OrderClause",
+    "Row",
     "SelectQuery",
     "StartsWith",
 ]
