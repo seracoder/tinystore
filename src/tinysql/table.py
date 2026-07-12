@@ -1,0 +1,278 @@
+"""Table-level CRUD operations over a storage backend.
+
+``Table[T]`` is bound to a model class and a :class:`~tinysql.database.Database`.
+All operations acquire the database-wide write lock (reentrant, so an active
+transaction is fine) and validate constraints (unique, optimistic concurrency)
+before writing. Single-op writes are atomic per table file; multi-table
+all-or-nothing durability arrives with the transaction journal in Phase 5.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
+
+from .exceptions import DoesNotExist, StaleDataError, UniqueConstraintError
+from .serialization import EMPTY_TABLE, model_to_row, row_to_model
+
+if TYPE_CHECKING:
+    from .database import Database
+    from .model import Model
+
+T = TypeVar("T", bound="Model")
+
+__all__ = ["Table"]
+
+
+class Table(Generic[T]):
+    """CRUD interface for a single model."""
+
+    def __init__(self, database: Database, model_cls: type[T]) -> None:
+        self.db = database
+        self.model_cls = model_cls
+        self.schema = model_cls.__tinysql_schema__
+        self.exclude = model_cls.__tinysql_relationship_fields__
+
+    # ---- internal helpers ----
+    def _read_state(self) -> dict[str, Any]:
+        return self.db._read_table_state(self.schema.name)
+
+    def _write_state(self, data: dict[str, Any]) -> None:
+        self.db._write_table_state(self.schema.name, data)
+
+    def _pk_field(self) -> str:
+        return self.schema.primary_key.name
+
+    def _decode(self, row: dict[str, Any]) -> T:
+        return row_to_model(self.model_cls, row, exclude=self.exclude)
+
+    def _encode(self, instance: T) -> dict[str, Any]:
+        return model_to_row(instance, exclude=self.exclude)
+
+    def _find_index(self, rows: list[dict[str, Any]], pk: object) -> int:
+        pk_field = self._pk_field()
+        for i, row in enumerate(rows):
+            if row.get(pk_field) == pk:
+                return i
+        return -1
+
+    def _check_unique(
+        self,
+        rows: list[dict[str, Any]],
+        instance: T,
+        exclude_pk: object | None = None,
+    ) -> None:
+        for field in self.schema.unique_fields:
+            value = getattr(instance, field.name)
+            if value is None and field.nullable:
+                continue
+            for row in rows:
+                if exclude_pk is not None and row.get(self._pk_field()) == exclude_pk:
+                    continue
+                if row.get(field.name) == value:
+                    raise UniqueConstraintError(self.schema.name, field.name, value)
+
+    # ---- public CRUD ----
+    def insert(self, instance: T) -> T:
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            pk_meta = self.schema.primary_key
+
+            if getattr(instance, pk_field) is None and pk_meta.autoincrement:
+                next_id = state.get("next_id", 1)
+                setattr(instance, pk_field, next_id)
+                state["next_id"] = next_id + 1
+
+            pk_value = getattr(instance, pk_field)
+            if pk_value is None:
+                raise ValueError(
+                    f"Cannot insert {self.model_cls.__name__} without a primary key value"
+                )
+            if self._find_index(rows, pk_value) >= 0:
+                from .exceptions import UniqueConstraintError as _UCE
+
+                raise _UCE(self.schema.name, pk_field, pk_value)
+
+            self._check_unique(rows, instance)
+
+            # New rows start at version 1.
+            object.__setattr__(instance, "_tinysql_version", 1)
+            rows.append(self._encode(instance))
+            self._write_state(state)
+            return instance
+
+    def insert_many(self, instances: list[T]) -> list[T]:
+        if not instances:
+            return []
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            pk_meta = self.schema.primary_key
+            result: list[T] = []
+            for instance in instances:
+                if getattr(instance, pk_field) is None and pk_meta.autoincrement:
+                    next_id = state.get("next_id", 1)
+                    setattr(instance, pk_field, next_id)
+                    state["next_id"] = next_id + 1
+                pk_value = getattr(instance, pk_field)
+                if pk_value is None:
+                    raise ValueError(
+                        f"Cannot insert {self.model_cls.__name__} without a primary key value"
+                    )
+                if self._find_index(rows, pk_value) >= 0:
+                    raise UniqueConstraintError(self.schema.name, pk_field, pk_value)
+                self._check_unique(rows, instance)
+                object.__setattr__(instance, "_tinysql_version", 1)
+                rows.append(self._encode(instance))
+                result.append(instance)
+            self._write_state(state)
+            return result
+
+    def get(self, pk: object) -> T:
+        with self.db.lock():
+            rows = self._read_state()["rows"]
+            idx = self._find_index(rows, pk)
+            if idx < 0:
+                raise DoesNotExist(
+                    f"{self.model_cls.__name__} with {self._pk_field()}={pk!r} does not exist"
+                )
+            return self._decode(rows[idx])
+
+    def get_by(self, field: str, value: object) -> T:
+        with self.db.lock():
+            rows = self._read_state()["rows"]
+            matches = [r for r in rows if r.get(field) == value]
+            if not matches:
+                raise DoesNotExist(
+                    f"{self.model_cls.__name__} where {field}={value!r} does not exist"
+                )
+            if len(matches) > 1:
+                from .exceptions import MultipleObjectsReturned
+
+                raise MultipleObjectsReturned(
+                    f"{self.model_cls.__name__} where {field}={value!r} returned "
+                    f"{len(matches)} rows"
+                )
+            return self._decode(matches[0])
+
+    def all(self) -> list[T]:
+        with self.db.lock():
+            rows = self._read_state()["rows"]
+            return [self._decode(r) for r in rows]
+
+    def find(self, field: str, value: object) -> list[T]:
+        with self.db.lock():
+            rows = self._read_state()["rows"]
+            return [self._decode(r) for r in rows if r.get(field) == value]
+
+    def update(self, instance: T) -> T:
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            pk_value = getattr(instance, pk_field)
+            idx = self._find_index(rows, pk_value)
+            if idx < 0:
+                raise DoesNotExist(
+                    f"Cannot update {self.model_cls.__name__} with {pk_field}={pk_value!r}: "
+                    "not found"
+                )
+            stored = rows[idx]
+            stored_version = stored.get("__version", 0)
+            loaded_version = getattr(instance, "_tinysql_version", 0)
+            if self.db.optimistic_concurrency and stored_version != loaded_version:
+                raise StaleDataError(self.schema.name, pk_value)
+
+            self._check_unique(rows, instance, exclude_pk=pk_value)
+            new_version = stored_version + 1
+            object.__setattr__(instance, "_tinysql_version", new_version)
+            rows[idx] = self._encode(instance)
+            self._write_state(state)
+            return instance
+
+    def update_many(self, instances: list[T]) -> list[T]:
+        if not instances:
+            return []
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            result: list[T] = []
+            for instance in instances:
+                pk_value = getattr(instance, pk_field)
+                idx = self._find_index(rows, pk_value)
+                if idx < 0:
+                    raise DoesNotExist(
+                        f"Cannot update {self.model_cls.__name__} with {pk_field}={pk_value!r}"
+                    )
+                stored = rows[idx]
+                stored_version = stored.get("__version", 0)
+                loaded_version = getattr(instance, "_tinysql_version", 0)
+                if self.db.optimistic_concurrency and stored_version != loaded_version:
+                    raise StaleDataError(self.schema.name, pk_value)
+                self._check_unique(rows, instance, exclude_pk=pk_value)
+                object.__setattr__(instance, "_tinysql_version", stored_version + 1)
+                rows[idx] = self._encode(instance)
+                result.append(instance)
+            self._write_state(state)
+            return result
+
+    def delete(self, target: object | T) -> int:
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            pk_value = getattr(target, pk_field) if isinstance(target, self.model_cls) else target
+            idx = self._find_index(rows, pk_value)
+            if idx < 0:
+                raise DoesNotExist(
+                    f"Cannot delete {self.model_cls.__name__} with {pk_field}={pk_value!r}"
+                )
+            del rows[idx]
+            self._write_state(state)
+            return 1
+
+    def delete_many(self, targets: list[object | T]) -> int:
+        if not targets:
+            return 0
+        with self.db.lock():
+            state = self._read_state()
+            rows: list[dict[str, Any]] = state["rows"]
+            pk_field = self._pk_field()
+            pks_to_delete: list[object] = []
+            for target in targets:
+                if isinstance(target, self.model_cls):
+                    pks_to_delete.append(getattr(target, pk_field))
+                else:
+                    pks_to_delete.append(target)
+            keep: list[dict[str, Any]] = []
+            deleted = 0
+            for row in rows:
+                if row.get(pk_field) in pks_to_delete:
+                    deleted += 1
+                else:
+                    keep.append(row)
+            state["rows"] = keep
+            self._write_state(state)
+            return deleted
+
+    def count(self) -> int:
+        with self.db.lock():
+            return len(self._read_state()["rows"])
+
+    def save(self, instance: T) -> T:
+        pk_field = self._pk_field()
+        with self.db.lock():
+            rows = self._read_state()["rows"]
+            pk_value = getattr(instance, pk_field)
+            if pk_value is None or self._find_index(rows, pk_value) < 0:
+                return self.insert(instance)
+            return self.update(instance)
+
+    def ensure_created(self) -> None:
+        """Create the table file if missing, with the empty-table skeleton."""
+        with self.db.lock():
+            if not self.db._table_exists(self.schema.name):
+                self.db._write_table_state(self.schema.name, dict(EMPTY_TABLE))
