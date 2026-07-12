@@ -57,6 +57,8 @@ def test_relationship_field_excluded_from_persistence(db: Database) -> None:
 
     db.register(Author)
     db.register(Post)
+    a = Author(id=1, name="A")
+    db.insert(a)
     p = Post(title="t", author_id=1)
     db.insert(p)
     state = db.storage.read_table("posts")
