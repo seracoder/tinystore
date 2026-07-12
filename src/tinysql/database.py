@@ -14,13 +14,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from .exceptions import SchemaError
+from .exceptions import RelationshipError, SchemaError
 from .locking import FileLockManager, LockHandle, LockManager
 from .model import Model
 from .schema import METADATA_VERSION, TableSchema, classify_change
 from .serialization import EMPTY_TABLE
 from .storage.json import JsonStorage
-from .table import Table
+from .table import Table, _parse_fk
 
 if TYPE_CHECKING:
     from .transaction import Transaction
@@ -261,6 +261,80 @@ class Database:
         # Ensure registered (raises clear error otherwise).
         self.table(model_cls)
         return SelectQuery(self, model_cls)
+
+    # ---- relationships (Phase 3) ----
+    def related(self, obj: Model, name: str) -> Any:
+        """Explicitly load a related model or list of models for a relationship.
+
+        For a many-to-one / one-to-one relationship (the FK lives on this side)
+        returns a single instance, or ``None`` when the FK is null or the
+        referenced row is gone. For a one-to-many relationship (the FK lives on
+        the related side) returns a list of instances.
+
+        The side is inferred from the declared ``foreign_key``: if it names a
+        local FK field, this is the "one" end (follow the FK to its parent);
+        otherwise the related model is found by scanning registered models for
+        one whose field named ``foreign_key`` points back at this table.
+        """
+        model_cls = type(obj)
+        schema = model_cls.__tinysql_schema__
+        rel = next((r for r in schema.relationships if r[0] == name), None)
+        if rel is None:
+            raise RelationshipError(
+                f"{model_cls.__name__} has no relationship named {name!r}"
+            )
+        fk_field_name = rel[1]
+
+        local_field = schema.field(fk_field_name)
+        if local_field is not None and local_field.foreign_key:
+            return self._load_related_one(obj, fk_field_name, local_field.foreign_key)
+        return self._load_related_many(obj, schema, fk_field_name)
+
+    def _load_related_one(
+        self, obj: Model, fk_field_name: str, fk_ref: str
+    ) -> Model | None:
+        ref_table, ref_column = _parse_fk(fk_ref)
+        fk_value = getattr(obj, fk_field_name)
+        if fk_value is None:
+            return None
+        target_cls = self._registry.get(ref_table)
+        if target_cls is None:
+            raise RelationshipError(
+                f"Relationship via {fk_field_name!r} targets unregistered table "
+                f"{ref_table!r}"
+            )
+        matches = self.table(target_cls).find(ref_column, fk_value)
+        return matches[0] if matches else None
+
+    def _load_related_many(
+        self, obj: Model, schema: TableSchema, fk_field_name: str
+    ) -> list[Model]:
+        this_table = schema.name
+        candidates: list[type[Model]] = []
+        for tname, target_cls in self._registry.items():
+            if tname == this_table:
+                continue
+            tf = target_cls.__tinysql_schema__.field(fk_field_name)
+            if tf is not None and tf.foreign_key:
+                ref_table, _ = _parse_fk(tf.foreign_key)
+                if ref_table == this_table:
+                    candidates.append(target_cls)
+        if not candidates:
+            raise RelationshipError(
+                f"No registered model has a foreign key {fk_field_name!r} targeting "
+                f"{this_table!r}; cannot resolve one-to-many relationship"
+            )
+        if len(candidates) > 1:
+            names = ", ".join(c.__name__ for c in candidates)
+            raise RelationshipError(
+                f"Ambiguous relationship: multiple models ({names}) declare "
+                f"{fk_field_name!r} targeting {this_table!r}; disambiguate with "
+                "Relationship(to=...)"
+            )
+        target_cls = candidates[0]
+        this_pk = schema.primary_key.name
+        pk_value = getattr(obj, this_pk)
+        return self.table(target_cls).find(fk_field_name, pk_value)
 
     # ---- recovery (Phase 5 stub) ----
     def _recover(self) -> None:

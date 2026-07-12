@@ -71,6 +71,10 @@ class QueryError(TinySQLError):
     """A query expression is invalid (e.g. incompatible-type comparison)."""
 
 
+class RelationshipError(TinySQLError):
+    """A relationship could not be resolved (unknown name, ambiguous target, etc.)."""
+
+
 class StorageError(TinySQLError):
     """The underlying storage layer reported a failure (I/O, corruption)."""
 
@@ -82,6 +86,7 @@ __all__ = [
     "LockTimeoutError",
     "MultipleObjectsReturned",
     "QueryError",
+    "RelationshipError",
     "SchemaError",
     "StaleDataError",
     "StorageError",
