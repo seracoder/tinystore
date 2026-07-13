@@ -184,7 +184,7 @@ class Table(Generic[T]):
 
     # ---- public CRUD ----
     def insert(self, instance: T) -> T:
-        with self.db.lock():
+        with self.db._ensure_transaction():
             state = self._read_state()
             rows: list[dict[str, Any]] = state["rows"]
             pk_field = self._pk_field()
@@ -217,7 +217,7 @@ class Table(Generic[T]):
     def insert_many(self, instances: list[T]) -> list[T]:
         if not instances:
             return []
-        with self.db.lock():
+        with self.db._ensure_transaction():
             state = self._read_state()
             rows: list[dict[str, Any]] = state["rows"]
             pk_field = self._pk_field()
@@ -281,7 +281,7 @@ class Table(Generic[T]):
             return [self._decode(r) for r in rows if r.get(field) == value]
 
     def update(self, instance: T) -> T:
-        with self.db.lock():
+        with self.db._ensure_transaction():
             state = self._read_state()
             rows: list[dict[str, Any]] = state["rows"]
             pk_field = self._pk_field()
@@ -309,7 +309,7 @@ class Table(Generic[T]):
     def update_many(self, instances: list[T]) -> list[T]:
         if not instances:
             return []
-        with self.db.lock():
+        with self.db._ensure_transaction():
             state = self._read_state()
             rows: list[dict[str, Any]] = state["rows"]
             pk_field = self._pk_field()
@@ -335,7 +335,7 @@ class Table(Generic[T]):
             return result
 
     def delete(self, target: object | T) -> int:
-        with self.db.lock():
+        with self.db._ensure_transaction():
             pk_field = self._pk_field()
             pk_value = getattr(target, pk_field) if isinstance(target, self.model_cls) else target
             state = self._read_state()
@@ -355,7 +355,7 @@ class Table(Generic[T]):
     def delete_many(self, targets: list[object | T]) -> int:
         if not targets:
             return 0
-        with self.db.lock():
+        with self.db._ensure_transaction():
             state = self._read_state()
             rows: list[dict[str, Any]] = state["rows"]
             pk_field = self._pk_field()
@@ -387,7 +387,7 @@ class Table(Generic[T]):
 
     def save(self, instance: T) -> T:
         pk_field = self._pk_field()
-        with self.db.lock():
+        with self.db._ensure_transaction():
             rows = self._read_state()["rows"]
             pk_value = getattr(instance, pk_field)
             if pk_value is None or self._find_index(rows, pk_value) < 0:
@@ -396,6 +396,6 @@ class Table(Generic[T]):
 
     def ensure_created(self) -> None:
         """Create the table file if missing, with the empty-table skeleton."""
-        with self.db.lock():
+        with self.db._ensure_transaction():
             if not self.db._table_exists(self.schema.name):
                 self.db._write_table_state(self.schema.name, dict(EMPTY_TABLE))

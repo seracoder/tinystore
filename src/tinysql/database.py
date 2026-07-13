@@ -8,7 +8,7 @@ models, then insert / query / update / delete.
 from __future__ import annotations
 
 import logging
-import secrets
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -74,10 +74,20 @@ class Database:
         self._tables: dict[str, Table[Any]] = {}
 
         # Active transaction (Phase 5). None when no transaction is active.
-        self._active_transaction: Transaction | None = None
+        # Thread-local: a transaction is owned by the thread that began it, so
+        # concurrent threads do not see (or reuse) each other's transactions.
+        self._tx_local = threading.local()
 
         # Recover any incomplete transactions before serving.
         self._recover()
+
+    @property
+    def _active_transaction(self) -> Transaction | None:
+        return getattr(self._tx_local, "value", None)
+
+    @_active_transaction.setter
+    def _active_transaction(self, tx: Transaction | None) -> None:
+        self._tx_local.value = tx
 
     # ---- properties ----
     @property
@@ -336,24 +346,67 @@ class Database:
         pk_value = getattr(obj, this_pk)
         return self.table(target_cls).find(fk_field_name, pk_value)
 
-    # ---- recovery (Phase 5 stub) ----
+    # ---- recovery (Phase 5) ----
     def _recover(self) -> None:
-        """Replay any leftover transaction journals found on open."""
+        """Replay any leftover transaction journals found on open.
+
+        Each journal is applied idempotently (its full table states overwrite
+        the table files), then removed. Journals are processed in sorted txid
+        order so a chain of commits restores in sequence.
+        """
         journals = self._storage.list_journals()
         if not journals:
             return
-        logger.warning("Found %d unfinished transaction(s); recovering.", len(journals))
-        for txid in journals:
-            try:
-                journal = self._storage.read_journal(txid)
-                tables = journal.get("tables", {})
-                for table_name, state in tables.items():
-                    self._storage.write_table(table_name, state)
-            except Exception as exc:
-                logger.error("Failed to recover journal %s: %s", txid, exc)
-                raise
-            finally:
-                self._storage.remove_journal(txid)
+        with self.lock():
+            # Re-list under the lock in case another process is recovering too.
+            journals = self._storage.list_journals()
+            if not journals:
+                return
+            logger.warning("Found %d unfinished transaction(s); recovering.", len(journals))
+            for txid in journals:
+                try:
+                    journal = self._storage.read_journal(txid)
+                    tables = journal.get("tables", {})
+                    for table_name, state in tables.items():
+                        self._storage.write_table(table_name, state)
+                except Exception as exc:
+                    logger.error("Failed to recover journal %s: %s", txid, exc)
+                    raise
+                finally:
+                    self._storage.remove_journal(txid)
+
+    # ---- internal: transaction ids ----
+    def _allocate_txid(self) -> str:
+        """Return a fresh, monotonically-increasing transaction id string.
+
+        The counter is persisted in metadata.json so ids are unique across
+        reopenings. Allocation is not transactional itself; a crash may leave a
+        gap in the sequence, which is harmless.
+        """
+        metadata = self._load_metadata()
+        n = int(metadata.get("next_txid", 1))
+        metadata["next_txid"] = n + 1
+        self._save_metadata(metadata)
+        return f"{n:010d}"
+
+    @contextmanager
+    def _ensure_transaction(self) -> Iterator[Transaction]:
+        """Run inside a transaction: reuse the active one, else start implicit.
+
+        Only a transaction created here is committed by this context manager;
+        when an outer transaction already exists it is yielded unchanged and
+        left open for the outer caller to commit. This lets every write method
+        declare ``with self.db._ensure_transaction():`` and compose safely
+        (e.g. ``save`` calling ``insert``).
+        """
+        from .transaction import Transaction
+
+        if self._active_transaction is not None:
+            yield self._active_transaction
+        else:
+            tx = Transaction(self)
+            with tx:
+                yield tx
 
     # ---- introspection / maintenance ----
     def check(self) -> list[str]:
@@ -397,8 +450,3 @@ class Database:
         with self.lock():
             self._storage.snapshot(target_path)
         return target_path
-
-    # ---- internal: allocate transaction ids ----
-    def _next_txid(self) -> str:
-        # Phase 1: not yet wired into metadata; use a random suffix for uniqueness.
-        return secrets.token_hex(8)

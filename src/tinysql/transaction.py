@@ -1,14 +1,13 @@
 """Transactions.
 
 A transaction acquires the database-wide write lock for its full duration and
-buffers all modified table states in memory. On commit it flushes every touched
-table atomically; on rollback it discards the buffer and no table files are
-touched.
+buffers all modified table states in memory. On commit it writes a write-ahead
+journal durably first (the commit point), then applies each touched table file,
+then removes the journal. A crash after the journal is durable but before all
+tables are applied is recovered on the next open by replaying the journal.
 
-Phase 1 provides basic transactions: each touched table file is written
-atomically on commit, but a crash *between* those writes can leave the database
-partially updated. Phase 5 adds a write-ahead journal that makes commit
-all-or-nothing across multiple table files.
+Every single-op mutation is wrapped as an implicit one-table transaction, so
+multi-table cascades (e.g. a cascading delete) are all-or-nothing too.
 
 Nested transactions are not supported and raise :class:`TransactionError`.
 """
@@ -28,7 +27,12 @@ logger = logging.getLogger("tinysql")
 
 
 class Transaction:
-    """A simple in-memory transaction with copy-on-first-touch buffering."""
+    """An in-memory transaction with copy-on-first-touch buffering.
+
+    Commit is durable and all-or-nothing across table files via the journal:
+    journal fsync is the commit point, then each table is applied, then the
+    journal is removed. Rollback discards the buffer without touching files.
+    """
 
     def __init__(self, database: Database, *, timeout: float | None = None) -> None:
         self.db = database
@@ -79,9 +83,19 @@ class Transaction:
         return None
 
     def _commit(self) -> None:
+        if not self._buffer:
+            logger.debug("transaction COMMIT (empty, nothing touched)")
+            return
+        txid = self.db._allocate_txid()
+        journal = {"txid": txid, "tables": self._buffer}
+        # COMMIT POINT: durable journal write. After this succeeds the
+        # transaction is committed even if we crash before applying tables;
+        # recovery on the next open will finish the apply.
+        self.db.storage.write_journal(txid, journal)
         for name, state in self._buffer.items():
             self.db.storage.write_table(name, state)
-        logger.debug("transaction COMMIT (%d tables)", len(self._buffer))
+        self.db.storage.remove_journal(txid)
+        logger.debug("transaction COMMIT %s (%d tables)", txid, len(self._buffer))
         self._buffer.clear()
 
     def _rollback(self) -> None:
