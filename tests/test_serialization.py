@@ -5,8 +5,8 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from tinysql import Database, Field, Model
-from tinysql.serialization import dumps
+from tinystore import Database, Field, Model
+from tinystore.serialization import dumps
 
 
 def test_roundtrip_datetime_uuid_enum_nested(registered_db: Database, make_user) -> None:
@@ -43,7 +43,7 @@ def test_dumps_ensure_ascii_false() -> None:
 
 
 def test_relationship_field_excluded_from_persistence(db: Database) -> None:
-    from tinysql.relationships import Relationship
+    from tinystore.relationships import Relationship
 
     class Author(Model):
         id: int | None = Field(default=None, primary_key=True)

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import MultipleObjectsReturned, QueryError
-from tinysql.query.joins import Row
+from tinystore import Database, Field, Model
+from tinystore.exceptions import MultipleObjectsReturned, QueryError
+from tinystore.query.joins import Row
 
 
 class User(Model):

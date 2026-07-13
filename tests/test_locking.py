@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from tinysql import Database, Model, StaleDataError
-from tinysql.exceptions import LockTimeoutError
+from tinystore import Database, Model, StaleDataError
+from tinystore.exceptions import LockTimeoutError
 
 
 def test_lock_reentrant_in_same_thread(registered_db: Database, make_user) -> None:

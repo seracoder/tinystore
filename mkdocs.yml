@@ -1,0 +1,139 @@
+site_name: TinyStore
+site_description: A lightweight, Pydantic-native relational database that persists as human-readable JSON files.
+site_url: https://seracoder.github.io/tinystore/
+repo_url: https://github.com/seracoder/tinystore
+repo_name: seracoder/tinystore
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; TinyStore Contributors — MIT License
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.expand
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - search.suggest
+    - search.highlight
+    - search.share
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    logo: material/database
+  favicon: assets/favicon.png
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/seracoder/tinystore
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/tinystore/
+
+extra_css:
+  - assets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            docstring_style: numpy
+            docstring_section_style: table
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+            show_signature_annotations: true
+            separate_signature: true
+            show_if_no_docstring: false
+            filters:
+              - "!^_"
+              - "^__init__$"
+            heading_level: 2
+            inherited_members: false
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guides:
+      - guides/index.md
+      - Models & fields: guides/models.md
+      - CRUD: guides/crud.md
+      - Querying: guides/querying.md
+      - Relationships: guides/relationships.md
+      - Joins: guides/joins.md
+      - Transactions: guides/transactions.md
+      - Storage format: guides/storage.md
+      - Locking model: guides/locking.md
+  - Examples:
+      - Blog app: examples/blog-app.md
+  - API reference:
+      - api/index.md
+      - Database: api/database.md
+      - Model & Field: api/model.md
+      - Relationships: api/relationships.md
+      - Schema: api/schema.md
+      - Table: api/table.md
+      - Queries: api/query.md
+      - Transactions: api/transaction.md
+      - Storage: api/storage.md
+      - Indexes: api/indexes.md
+      - Locking: api/locking.md
+      - Serialization: api/serialization.md
+      - Exceptions: api/exceptions.md

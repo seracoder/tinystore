@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import SchemaError
-from tinysql.model import _default_table_name, _pluralize, _to_snake_case
+from tinystore import Database, Field, Model
+from tinystore.exceptions import SchemaError
+from tinystore.model import _default_table_name, _pluralize, _to_snake_case
 
 
 def test_snake_case() -> None:
@@ -32,7 +32,7 @@ def test_default_table_name() -> None:
 
 
 def test_model_registers_table_name(registered_db: Database, user_model: type[Model]) -> None:
-    schema = user_model.__tinysql_schema__
+    schema = user_model.__tinystore_schema__
     assert schema.name == "users"
     assert schema.primary_key.name == "id"
     assert schema.primary_key.autoincrement is True
@@ -47,7 +47,7 @@ def test_meta_override_table_name(db: Database) -> None:
             table_name = "accounts"
 
     db.register(Account)
-    assert Account.__tinysql_schema__.name == "accounts"
+    assert Account.__tinystore_schema__.name == "accounts"
     assert (db.root / "tables" / "accounts.json").exists()
 
 

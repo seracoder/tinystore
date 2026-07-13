@@ -21,4 +21,7 @@ graphify-out/
 .coverage
 htmlcov/
 
+# Docs build output
+site/
+
 todo/

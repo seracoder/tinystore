@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import StorageError
+from tinystore import Database, Field, Model
+from tinystore.exceptions import StorageError
 
 
 def test_table_file_format(registered_db: Database, make_user) -> None:
@@ -66,7 +66,7 @@ def test_journal_dir_created(db_path) -> None:
     Database(db_path)
     assert (db_path / "journal").exists()
     assert (db_path / "tables").exists()
-    assert (db_path / "tinysql.lock").exists()
+    assert (db_path / "tinystore.lock").exists()
 
 
 def test_metadata_created_on_first_register(db_path) -> None:
@@ -84,7 +84,7 @@ def test_metadata_created_on_first_register(db_path) -> None:
 def test_lock_file_existence_is_meaningless(db_path) -> None:
     # Opening and closing leaves the lock file behind; a second open should still work.
     db1 = Database(db_path)
-    assert (db_path / "tinysql.lock").exists()
+    assert (db_path / "tinystore.lock").exists()
     db2 = Database(db_path)
     # If mere existence were treated as a lock, this would deadlock/timeout.
     assert db2.root == db1.root

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tinysql import Database
-from tinysql.serialization import dumps
+from tinystore import Database
+from tinystore.serialization import dumps
 
 
 def test_recovery_replays_leftover_journal(db_path: Path) -> None:

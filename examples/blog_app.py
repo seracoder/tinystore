@@ -1,4 +1,4 @@
-"""A complete TinySQL example: a simple blog with users, posts, and comments.
+"""A complete TinyStore example: a simple blog with users, posts, and comments.
 
 Run:  python examples/blog_app.py
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tinysql import Database, Field, Model, Relationship
+from tinystore import Database, Field, Model, Relationship
 
 
 def main() -> None:
@@ -50,7 +50,7 @@ def main() -> None:
         assert bob.id is not None
 
         post1 = db.insert(Post(title="Hello World", body="My first post", author_id=alice.id))
-        post2 = db.insert(Post(title="TinySQL Tips", body="...", author_id=alice.id))
+        post2 = db.insert(Post(title="TinyStore Tips", body="...", author_id=alice.id))
         db.insert(Post(title="Bob's Review", body="Great!", author_id=bob.id))
 
         assert post1.id is not None

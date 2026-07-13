@@ -1,6 +1,6 @@
-# TinySQL
+# TinyStore
 
-[![CI](https://github.com/seracoder/tinysql/actions/workflows/ci.yml/badge.svg)](https://github.com/seracoder/tinysql/actions/workflows/ci.yml)
+[![CI](https://github.com/seracoder/tinystore/actions/workflows/ci.yml/badge.svg)](https://github.com/seracoder/tinystore/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -8,7 +8,7 @@ A lightweight, **Pydantic-native** relational database that persists data as
 **human-readable JSON files**. No external server, no daemon, no binary format —
 just validated models on disk.
 
-TinySQL combines TinyDB-like simplicity with SQLite/ORM relational concepts:
+TinyStore combines TinyDB-like simplicity with SQLite/ORM relational concepts:
 typed Pydantic v2 models, a Pythonic query DSL, unique and foreign-key
 constraints, in-memory joins, write-ahead-journaled transactions, and file
 locking. It is built for small apps, CLI tools, prototypes, tests, and embedded
@@ -18,7 +18,7 @@ datasets — **not** for high-volume or high-concurrency workloads.
 
 ## 1. Overview
 
-TinySQL turns Pydantic models into database tables backed by JSON files. Each
+TinyStore turns Pydantic models into database tables backed by JSON files. Each
 table is a separate file you can read, diff, and back up with any tool. Data is
 validated by Pydantic v2 on the way in and out. A typed query DSL replaces
 string interpolation, and a write-ahead journal makes multi-table transactions
@@ -31,16 +31,16 @@ safety, testability, readable implementation, performance.
 
 ## 2. Installation
 
-TinySQL requires Python 3.11 or newer.
+TinyStore requires Python 3.11 or newer.
 
 ```bash
-pip install tinysql
+pip install tinystore
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv add tinysql
+uv add tinystore
 ```
 
 ---
@@ -48,7 +48,7 @@ uv add tinysql
 ## 3. Quick start
 
 ```python
-from tinysql import Database, Field, Model
+from tinystore import Database, Field, Model
 
 
 class User(Model):
@@ -97,7 +97,7 @@ class Post(Model):
         table_name = "posts"   # optional; defaults to a pluralized snake_case name
 ```
 
-`Field` wraps `pydantic.Field` and attaches TinySQL metadata:
+`Field` wraps `pydantic.Field` and attaches TinyStore metadata:
 
 | Keyword         | Default      | Description                                                            |
 | --------------- | ------------ | --------------------------------------------------------------------- |
@@ -126,7 +126,7 @@ class User(Model):
 
 ### Schema evolution
 
-When you reopen a database, TinySQL compares the registered model's schema
+When you reopen a database, TinyStore compares the registered model's schema
 against the stored fingerprint. **Additive** changes (new nullable/defaulted
 field) are accepted automatically. **Breaking** changes (removed field, type
 change) raise `SchemaError`. Use `db.reset_schema()` to discard stored metadata
@@ -239,7 +239,7 @@ explicitly via `db.related()`. Relationship fields are never persisted — only
 the foreign-key column is stored.
 
 ```python
-from tinysql import Relationship
+from tinystore import Relationship
 
 class Post(Model):
     id: int | None = Field(default=None, primary_key=True)
@@ -300,7 +300,7 @@ rows = (
 ```
 
 Joins are evaluated in memory with nested loops — every participating table is
-read fully. This is deliberate: TinySQL stores rows as JSON files, so a
+read fully. This is deliberate: TinyStore stores rows as JSON files, so a
 disk-efficient join is outside the scope of v1.
 
 ---
@@ -334,7 +334,7 @@ Nested transactions are not supported and raise `TransactionError`.
 ### Optimistic concurrency
 
 Each row carries a hidden version number. When you load a row, mutate it, and
-call `db.save()` / `db.update()`, TinySQL checks that the stored version still
+call `db.save()` / `db.update()`, TinyStore checks that the stored version still
 matches the one you loaded — if another writer got there first, it raises
 `StaleDataError`. Disable it with `Database(path, optimistic_concurrency=False)`.
 
@@ -348,7 +348,7 @@ with any tool:
 ```
 app_data/
 ├── metadata.json     # version + per-table schema fingerprints + txid counter
-├── tinysql.lock      # OS-lock coordination file (its existence is meaningless)
+├── tinystore.lock      # OS-lock coordination file (its existence is meaningless)
 ├── journal/          # transaction journals (empty when idle)
 └── tables/
     ├── users.json    # {"version": 1, "next_id": 4, "rows": [...]}
@@ -368,7 +368,7 @@ A table file looks like:
 ```
 
 All writes use `tempfile -> fsync -> os.replace -> fsync(dir)` — never in-place
-mutation. TinySQL never `eval`s, `exec`s, or `pickle`s data; it `json.loads`
+mutation. TinyStore never `eval`s, `exec`s, or `pickle`s data; it `json.loads`
 into validated Pydantic models and treats the database directory as trusted
 local storage. Corrupt JSON produces a clear error instead of silent data loss.
 
@@ -380,7 +380,7 @@ Every operation acquires a single **database-wide write lock** with two layers:
 
 1. **In-process**: `threading.RLock` (reentrant, so an active transaction can
    nest operations freely).
-2. **Cross-process**: `portalocker` `RLock` on `tinysql.lock` (OS-level file
+2. **Cross-process**: `portalocker` `RLock` on `tinystore.lock` (OS-level file
    locking, so independent processes can safely share one database).
 
 ```python
@@ -409,7 +409,7 @@ only a successful `acquire()` matters.
   are single-column only. Composite constraints are on the roadmap.
 - **Additive-only schema changes.** Removing a field or changing its type is
   rejected. Use `db.reset_schema()` (destructive) or migrate manually.
-- **No network layer.** TinySQL is an embedded library, not a client-server
+- **No network layer.** TinyStore is an embedded library, not a client-server
   database.
 - **Trusted local storage.** Data is deserialized with `json.loads` into
   validated Pydantic models, but the database directory is assumed to be under
@@ -452,10 +452,10 @@ and journals. The backup is a point-in-time copy that can be opened by a new
 
 ## Errors
 
-All errors inherit from `TinySQLError`:
+All errors inherit from `TinyStoreError`:
 
 ```
-TinySQLError
+TinyStoreError
 ├── IntegrityError
 │   ├── UniqueConstraintError
 │   ├── ForeignKeyError
@@ -471,7 +471,7 @@ TinySQLError
 ```
 
 ```python
-from tinysql import DoesNotExist, UniqueConstraintError
+from tinystore import DoesNotExist, UniqueConstraintError
 
 try:
     db.get(User, 999)
@@ -483,7 +483,7 @@ except DoesNotExist:
 
 ## Development
 
-TinySQL uses [uv](https://docs.astral.sh/uv/) for environment and dependency
+TinyStore uses [uv](https://docs.astral.sh/uv/) for environment and dependency
 management, [ruff](https://docs.astral.sh/ruff/) for lint/format, and
 [mypy --strict](https://mypy-lang.org/) for types.
 

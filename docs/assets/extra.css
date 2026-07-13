@@ -1,0 +1,16 @@
+/* TinyStore docs — small tweaks on top of MkDocs Material. */
+
+/* Tighten the docstring tables produced by mkdocstrings. */
+.doc-object .doc-contents {
+  padding-left: 0.8rem;
+}
+
+/* Keep inline code from wrapping awkwardly in signature blocks. */
+.doc-signature {
+  white-space: pre-wrap;
+}
+
+/* Slightly larger, clearer "Parameters"/"Returns" section labels. */
+.doc-label {
+  font-weight: 600;
+}

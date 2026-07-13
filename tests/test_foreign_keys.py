@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from tinysql import Database, Field, ForeignKeyError, Model
-from tinysql.exceptions import DoesNotExist
+from tinystore import Database, Field, ForeignKeyError, Model
+from tinystore.exceptions import DoesNotExist
 
 
 class Author(Model):

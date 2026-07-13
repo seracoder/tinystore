@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database, Field, Model
+from tinystore import Database, Field, Model
 
 
 class Item(Model):

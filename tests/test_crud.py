@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Model
-from tinysql.exceptions import DoesNotExist
+from tinystore import Database, Model
+from tinystore.exceptions import DoesNotExist
 
 
 def test_insert_assigns_autoincrement(registered_db: Database, make_user) -> None:

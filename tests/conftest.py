@@ -1,4 +1,4 @@
-"""Shared test fixtures for TinySQL."""
+"""Shared test fixtures for TinyStore."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from tinysql import Database, Field, Model
+from tinystore import Database, Field, Model
 
 
 class Status(Enum):

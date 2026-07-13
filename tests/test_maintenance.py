@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database
-from tinysql.exceptions import DoesNotExist
+from tinystore import Database
+from tinystore.exceptions import DoesNotExist
 
 
 def test_check_clean_db_returns_no_problems(registered_db: Database, make_user) -> None:
@@ -54,7 +54,7 @@ def test_backup_creates_readable_copy(
 def test_backup_excludes_lock_and_journal(registered_db: Database, tmp_path: Path) -> None:
     target = tmp_path / "bk"
     registered_db.backup(target)
-    assert not (target / "tinysql.lock").exists()
+    assert not (target / "tinystore.lock").exists()
     assert not (target / "journal").exists()
 
 

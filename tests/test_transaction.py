@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Model
-from tinysql.exceptions import TransactionError
+from tinystore import Database, Model
+from tinystore.exceptions import TransactionError
 
 
 def test_transaction_commit_persists(
@@ -59,7 +59,7 @@ def test_transaction_isolation_from_other_instances(tmp_path) -> None:
     import threading
 
     from tests.conftest import User
-    from tinysql.exceptions import LockTimeoutError
+    from tinystore.exceptions import LockTimeoutError
 
     # Register on both instances first (no contention yet).
     db = Database(tmp_path / "iso")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import SchemaError
+from tinystore import Database, Field, Model
+from tinystore.exceptions import SchemaError
 
 
 def test_additive_new_nullable_field_ok(db_path) -> None:

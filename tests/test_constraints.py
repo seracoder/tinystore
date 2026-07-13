@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import StaleDataError, UniqueConstraintError
+from tinystore import Database, Field, Model
+from tinystore.exceptions import StaleDataError, UniqueConstraintError
 
 
 def test_unique_violation_on_insert(registered_db: Database, make_user) -> None:
@@ -64,11 +64,11 @@ def test_optimistic_concurrency_disabled(db_path, user_model, make_user) -> None
 
 def test_version_increments_on_update(registered_db: Database, make_user) -> None:
     u = registered_db.insert(make_user(email="a@x.com"))
-    assert u._tinysql_version == 1
+    assert u._tinystore_version == 1
     u.name = "x"
     registered_db.update(u)
-    assert u._tinysql_version == 2
-    assert registered_db.get(type(u), u.id)._tinysql_version == 2
+    assert u._tinystore_version == 2
+    assert registered_db.get(type(u), u.id)._tinystore_version == 2
 
 
 def test_duplicate_explicit_pk_rejected(registered_db: Database, make_user) -> None:

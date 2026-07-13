@@ -1,5 +1,5 @@
 [project]
-name = "tinysql"
+name = "tinystore"
 version = "0.1.0"
 description = "A lightweight, Pydantic-native relational database that persists as human-readable JSON files."
 readme = "README.md"
@@ -7,7 +7,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [
-    { name = "TinySQL Contributors" },
+    { name = "TinyStore Contributors" },
 ]
 keywords = [
     "database",
@@ -38,9 +38,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/seracoder/tinysql"
-Repository = "https://github.com/seracoder/tinysql"
-Issues = "https://github.com/seracoder/tinysql/issues"
+Homepage = "https://github.com/seracoder/tinystore"
+Repository = "https://github.com/seracoder/tinystore"
+Issues = "https://github.com/seracoder/tinystore/issues"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]
@@ -52,7 +52,12 @@ dev = [
     "pytest-cov>=4.1",
     "pytest-timeout>=2.2",
     "ruff>=0.6",
-    "mypy>=1.10",
+    "mypy>=2.3.0",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.6",
 ]
 
 [tool.uv]
@@ -120,7 +125,7 @@ disallow_incomplete_defs = true
 check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
-files = ["src/tinysql"]
+files = ["src/tinystore"]
 
 [[tool.mypy.overrides]]
 module = "portalocker.*"
@@ -129,7 +134,7 @@ ignore_missing_imports = true
 # ---- coverage ----
 [tool.coverage.run]
 branch = true
-source = ["src/tinysql"]
+source = ["src/tinystore"]
 
 [tool.coverage.report]
 exclude_lines = [

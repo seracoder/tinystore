@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tinysql import Database
-from tinysql.exceptions import DoesNotExist, MultipleObjectsReturned, QueryError
+from tinystore import Database
+from tinystore.exceptions import DoesNotExist, MultipleObjectsReturned, QueryError
 
 
 @pytest.fixture

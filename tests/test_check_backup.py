@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database, Field, Model
+from tinystore import Database, Field, Model
 
 
 class User(Model):
@@ -101,7 +101,7 @@ def test_backup_excludes_lock_and_journals(db: Database, db_path: Path) -> None:
     backup_dir = db_path / "backup"
     db.backup(backup_dir)
     # No lock file in the backup.
-    assert not (backup_dir / "tinysql.lock").exists()
+    assert not (backup_dir / "tinystore.lock").exists()
     # No journal directory.
     assert not (backup_dir / "journal").exists()
 

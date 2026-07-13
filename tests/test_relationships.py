@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database, Field, Model
-from tinysql.exceptions import RelationshipError
-from tinysql.relationships import Relationship
+from tinystore import Database, Field, Model
+from tinystore.exceptions import RelationshipError
+from tinystore.relationships import Relationship
 
 
 # Many-to-one: Post.author -> Author (FK on the Post side).

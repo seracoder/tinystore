@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from tinysql import Database, Field, ForeignKeyError, Model
-from tinysql.exceptions import UniqueConstraintError
-from tinysql.serialization import dumps
+from tinystore import Database, Field, ForeignKeyError, Model
+from tinystore.exceptions import UniqueConstraintError
+from tinystore.serialization import dumps
 
 
 class User(Model):
