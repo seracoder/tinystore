@@ -29,7 +29,7 @@ def main() -> None:
         body: str = ""
         views: int = Field(default=0, index=True)
         author_id: int = Field(foreign_key="users.id", on_delete="CASCADE")
-        author: User | None = Relationship(foreign_key="author_id")
+        author: User | None = Relationship(foreign_key="author_id")  # type: ignore[assignment]
 
     class Comment(Model):
         id: int | None = Field(default=None, primary_key=True)
@@ -45,12 +45,16 @@ def main() -> None:
 
     with db.transaction():
         alice = db.insert(User(name="Alice", email="alice@blog.dev"))
+        assert alice.id is not None
         bob = db.insert(User(name="Bob", email="bob@blog.dev"))
+        assert bob.id is not None
 
         post1 = db.insert(Post(title="Hello World", body="My first post", author_id=alice.id))
         post2 = db.insert(Post(title="TinySQL Tips", body="...", author_id=alice.id))
         db.insert(Post(title="Bob's Review", body="Great!", author_id=bob.id))
 
+        assert post1.id is not None
+        assert post2.id is not None
         db.insert(Comment(body="Welcome!", post_id=post1.id, author_id=bob.id))
         db.insert(Comment(body="Useful tips.", post_id=post2.id, author_id=bob.id))
 

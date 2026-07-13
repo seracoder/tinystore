@@ -303,7 +303,7 @@ class FieldProxy:
         self.field = field
         self.field_type = field_type
 
-    def __eq__(self, value: Any) -> Any:
+    def __eq__(self, value: Any) -> Comparison | JoinCondition:  # type: ignore[override]
         if isinstance(value, FieldProxy):
             return JoinCondition(self.model, self.field, value.model, value.field)
         cmp = Comparison(self.field, "eq", value)

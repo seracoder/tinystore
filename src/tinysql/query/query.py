@@ -64,7 +64,7 @@ class SelectQuery(Generic[T]):
         self._offset: int = 0
 
     # ---- builders (return self for chaining) ----
-    def where(self, *exprs: Expression) -> SelectQuery[T]:
+    def where(self, *exprs: Any) -> SelectQuery[T]:
         for e in exprs:
             if not isinstance(e, Expression):
                 raise TypeError(f"where() expects Expression, got {type(e).__name__}")
