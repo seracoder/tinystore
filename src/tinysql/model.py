@@ -1,16 +1,18 @@
 """TinySQL model base.
 
-``Model`` is a thin layer over :class:`pydantic.BaseModel`. It does **not** add
-a metaclass; instead it uses Pydantic's own ``__pydantic_init_subclass__`` hook
-to introspect fields once Pydantic has built the class, and records TinySQL
-metadata (primary key, unique, index, foreign key, relationships) on a
-``TableSchema`` attached to the class as ``__tinysql_schema__``.
+``Model`` is a thin layer over :class:`pydantic.BaseModel`. It uses a custom
+metaclass (subclassing Pydantic's own ``ModelMetaclass``) so that class-level
+field access — e.g. ``Post.title`` — resolves to a :class:`FieldProxy` for both
+static type checkers and runtime query building. Field metadata (primary key,
+unique, index, foreign key, relationships) is introspected via Pydantic's own
+``__pydantic_init_subclass__`` hook and recorded on a ``TableSchema`` attached
+to the class as ``__tinysql_schema__``.
 """
 
 from __future__ import annotations
 
 import re
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 from pydantic_core import PydanticUndefined
@@ -19,6 +21,11 @@ from .fields import get_meta, strip_meta
 from .query.expressions import FieldProxy
 from .relationships import CARDINALITY_MANY, Relationship, RelationshipMetadata
 from .schema import FieldMetadata, TableSchema
+
+if TYPE_CHECKING:
+    from pydantic._internal._model_construction import ModelMetaclass as _BaseMeta
+else:
+    _BaseMeta = type(BaseModel)
 
 __all__ = ["Model"]
 
@@ -81,7 +88,30 @@ def _type_to_str(annotation: Any) -> str:
     return qualname
 
 
-class Model(BaseModel):
+class _TinySQLMeta(_BaseMeta):
+    """TinySQL model metaclass.
+
+    ``__getattr__`` resolves class-level model-field access (e.g.
+    ``Post.title``) to :class:`FieldProxy` so that static type checkers
+    and IDEs can resolve the attribute. At runtime, non-data descriptors
+    installed in ``__pydantic_init_subclass__`` handle the actual access;
+    this method is never reached for known fields (the descriptor in
+    ``cls.__dict__`` takes priority). It is a fallback that exists purely
+    to give type checkers a return type to infer from.
+    """
+
+    def __getattr__(cls, name: str) -> FieldProxy:
+        for klass in cls.__mro__:
+            schema = klass.__dict__.get("__tinysql_schema__")
+            if schema is not None:
+                for fm in schema.fields:
+                    if fm.name == name:
+                        return FieldProxy(cls, name, fm.type_str)
+                break
+        raise AttributeError(f"type {cls.__name__!r} has no attribute {name!r}")
+
+
+class Model(BaseModel, metaclass=_TinySQLMeta):
     """Base class for all TinySQL models.
 
     Subclass it, declare Pydantic fields, and optionally a nested ``Meta``
