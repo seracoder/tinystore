@@ -12,7 +12,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from .exceptions import RelationshipError, SchemaError
 from .locking import FileLockManager, LockHandle, LockManager
@@ -23,7 +23,10 @@ from .storage.json import JsonStorage
 from .table import Table, _parse_fk
 
 if TYPE_CHECKING:
+    from .query import SelectQuery
     from .transaction import Transaction
+
+T = TypeVar("T", bound="Model")
 
 __all__ = ["Database"]
 
@@ -127,7 +130,7 @@ class Database:
         return self._storage.table_exists(name)
 
     # ---- registration ----
-    def register(self, model_cls: type[Model]) -> type[Model]:
+    def register(self, model_cls: type[T]) -> type[T]:
         """Register a model class with this database.
 
         Creates its table file if missing, validates schema compatibility with
@@ -180,14 +183,14 @@ class Database:
         except Exception as exc:  # pragma: no cover - forward-ref issues are non-fatal here
             logger.debug("model_rebuild deferred for %s: %s", model_cls.__name__, exc)
 
-    def table(self, model_cls: type[Model]) -> Table[Any]:
+    def table(self, model_cls: type[T]) -> Table[T]:
         schema = model_cls.__tinysql_schema__
         name = schema.name
         if name not in self._registry:
             raise SchemaError(f"Model {model_cls.__name__!r} is not registered with this database")
         cached = self._tables.get(name)
         if cached is not None:
-            return cached
+            return cast("Table[T]", cached)
         tbl = Table(self, model_cls)
         self._tables[name] = tbl
         return tbl
@@ -217,33 +220,33 @@ class Database:
             self._tables.clear()
 
     # ---- convenience CRUD dispatch ----
-    def insert(self, instance: Model) -> Model:
-        return cast(Model, self.table(type(instance)).insert(instance))
+    def insert(self, instance: T) -> T:
+        return self.table(type(instance)).insert(instance)
 
-    def insert_many(self, instances: list[Model]) -> list[Model]:
+    def insert_many(self, instances: list[T]) -> list[T]:
         if not instances:
             return []
-        return cast(list[Model], self.table(type(instances[0])).insert_many(instances))
+        return self.table(type(instances[0])).insert_many(instances)
 
-    def get(self, model_cls: type[Model], pk: object) -> Model:
-        return cast(Model, self.table(model_cls).get(pk))
+    def get(self, model_cls: type[T], pk: object) -> T:
+        return self.table(model_cls).get(pk)
 
-    def get_by(self, model_cls: type[Model], field: str, value: object) -> Model:
-        return cast(Model, self.table(model_cls).get_by(field, value))
+    def get_by(self, model_cls: type[T], field: str, value: object) -> T:
+        return self.table(model_cls).get_by(field, value)
 
-    def all(self, model_cls: type[Model]) -> list[Model]:
-        return cast(list[Model], self.table(model_cls).all())
+    def all(self, model_cls: type[T]) -> list[T]:
+        return self.table(model_cls).all()
 
-    def save(self, instance: Model) -> Model:
-        return cast(Model, self.table(type(instance)).save(instance))
+    def save(self, instance: T) -> T:
+        return self.table(type(instance)).save(instance)
 
-    def update(self, instance: Model) -> Model:
-        return cast(Model, self.table(type(instance)).update(instance))
+    def update(self, instance: T) -> T:
+        return self.table(type(instance)).update(instance)
 
-    def update_many(self, instances: list[Model]) -> list[Model]:
+    def update_many(self, instances: list[T]) -> list[T]:
         if not instances:
             return []
-        return cast(list[Model], self.table(type(instances[0])).update_many(instances))
+        return self.table(type(instances[0])).update_many(instances)
 
     def delete(self, target: Model | type[Model], pk: object | None = None) -> int:
         if isinstance(target, type) and issubclass(target, Model):
@@ -265,7 +268,7 @@ class Database:
         return Transaction(self, timeout=timeout)
 
     # ---- query (Phase 2) ----
-    def select(self, model_cls: type[Model]) -> Any:
+    def select(self, model_cls: type[T]) -> SelectQuery[T]:
         from .query import SelectQuery
 
         # Ensure registered (raises clear error otherwise).

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from ..exceptions import DoesNotExist, MultipleObjectsReturned
 from ..serialization import row_to_model
@@ -13,6 +13,8 @@ from .expressions import Expression
 if TYPE_CHECKING:
     from ..database import Database
     from ..model import Model
+
+T = TypeVar("T", bound="Model")
 
 __all__ = ["OrderClause", "SelectQuery"]
 
@@ -43,7 +45,7 @@ class OrderClause:
     descending: bool = False
 
 
-class SelectQuery:
+class SelectQuery(Generic[T]):
     """A SELECT query over a single model.
 
     Reads rows from the table (under the database lock) and filters / orders /
@@ -51,7 +53,7 @@ class SelectQuery:
     acquire the lock and materialize results.
     """
 
-    def __init__(self, database: Database, model_cls: type[Model]) -> None:
+    def __init__(self, database: Database, model_cls: type[T]) -> None:
         self.db = database
         self.model_cls = model_cls
         self.schema = model_cls.__tinysql_schema__
@@ -62,25 +64,25 @@ class SelectQuery:
         self._offset: int = 0
 
     # ---- builders (return self for chaining) ----
-    def where(self, *exprs: Expression) -> SelectQuery:
+    def where(self, *exprs: Expression) -> SelectQuery[T]:
         for e in exprs:
             if not isinstance(e, Expression):
                 raise TypeError(f"where() expects Expression, got {type(e).__name__}")
             self._where.append(e)
         return self
 
-    def order_by(self, field_proxy: Any | str, *, desc: bool = False) -> SelectQuery:
+    def order_by(self, field_proxy: Any | str, *, desc: bool = False) -> SelectQuery[T]:
         name = getattr(field_proxy, "field", field_proxy)
         self._order.append(OrderClause(field=name, descending=desc))
         return self
 
-    def limit(self, n: int) -> SelectQuery:
+    def limit(self, n: int) -> SelectQuery[T]:
         if n < 0:
             raise ValueError("limit must be non-negative")
         self._limit = n
         return self
 
-    def offset(self, n: int) -> SelectQuery:
+    def offset(self, n: int) -> SelectQuery[T]:
         if n < 0:
             raise ValueError("offset must be non-negative")
         self._offset = n
@@ -117,13 +119,13 @@ class SelectQuery:
                 rows = rows[: self._limit]
             return rows
 
-    def _decode(self, rows: list[dict[str, Any]]) -> list[Model]:
+    def _decode(self, rows: list[dict[str, Any]]) -> list[T]:
         return [row_to_model(self.model_cls, r, exclude=self.exclude) for r in rows]
 
-    def all(self) -> list[Model]:
+    def all(self) -> list[T]:
         return self._decode(self._rows())
 
-    def first(self) -> Model | None:
+    def first(self) -> T | None:
         prev_limit = self._limit
         self._limit = 1
         try:
@@ -134,7 +136,7 @@ class SelectQuery:
             return None
         return self._decode(rows)[0]
 
-    def one(self) -> Model:
+    def one(self) -> T:
         prev_limit = self._limit
         self._limit = None
         try:
@@ -149,7 +151,7 @@ class SelectQuery:
             )
         return self._decode(rows)[0]
 
-    def one_or_none(self) -> Model | None:
+    def one_or_none(self) -> T | None:
         prev_limit = self._limit
         self._limit = None
         try:
