@@ -412,33 +412,54 @@ class Database:
     def check(self) -> list[str]:
         """Validate on-disk state. Returns a list of problem descriptions.
 
-        An empty list means the database is consistent. Problems are also
-        logged. Raises :class:`~tinysql.exceptions.TinySQLError` for the first
-        hard failure (e.g. corrupt JSON).
+        Checks that every table file parses, primary keys are unique,
+        ``next_id`` exceeds the largest id in use, and registered foreign keys
+        resolve to an existing row in the referenced table. An empty list means
+        the database is consistent; problems are also logged at WARNING level.
         """
         problems: list[str] = []
         with self.lock():
+            # Read all registered table states once for FK cross-checks.
+            states: dict[str, dict[str, Any]] = {}
             for name in self._storage.list_tables():
                 try:
-                    state = self._storage.read_table(name)
+                    states[name] = self._storage.read_table(name)
                 except Exception as exc:
                     problems.append(f"table {name!r}: unreadable ({exc})")
-                    continue
+
+            for name, state in states.items():
                 rows = state.get("rows", [])
-                pk_field = None
-                if name in self._schemas:
-                    pk_field = self._schemas[name].primary_key.name
-                seen: set[object] = set()
-                for row in rows:
-                    if pk_field is not None:
+                schema = self._schemas.get(name)
+
+                # Primary-key uniqueness + next_id sanity.
+                pk_field = schema.primary_key.name if schema else None
+                if pk_field is not None:
+                    seen: set[object] = set()
+                    for row in rows:
                         pkv = row.get(pk_field)
                         if pkv in seen:
                             problems.append(f"table {name!r}: duplicate primary key {pkv!r}")
                         seen.add(pkv)
-                next_id = state.get("next_id", 1)
-                max_id = max((r.get(pk_field, 0) for r in rows), default=0) if pk_field else 0
-                if pk_field and next_id <= max_id:
-                    problems.append(f"table {name!r}: next_id {next_id} <= max id {max_id}")
+                    next_id = state.get("next_id", 1)
+                    max_id = max((r.get(pk_field, 0) for r in rows), default=0)
+                    if next_id <= max_id:
+                        problems.append(f"table {name!r}: next_id {next_id} <= max id {max_id}")
+
+                # Foreign-key referential integrity.
+                if schema is not None:
+                    for fk in schema.foreign_keys:
+                        ref_table, ref_col = _parse_fk(fk.foreign_key or "")
+                        ref_state = states.get(ref_table)
+                        if ref_state is None:
+                            continue  # unregistered / unknown table — skip
+                        ref_pks = {r.get(ref_col) for r in ref_state.get("rows", [])}
+                        for row in rows:
+                            val = row.get(fk.name)
+                            if val is not None and val not in ref_pks:
+                                problems.append(
+                                    f"table {name!r}: {fk.name}={val!r} references "
+                                    f"missing {ref_table}.{ref_col}"
+                                )
         if problems:
             for p in problems:
                 logger.warning("check(): %s", p)

@@ -190,16 +190,20 @@ class Table(Generic[T]):
             pk_field = self._pk_field()
             pk_meta = self.schema.primary_key
 
-            if getattr(instance, pk_field) is None and pk_meta.autoincrement:
-                next_id = state.get("next_id", 1)
-                setattr(instance, pk_field, next_id)
-                state["next_id"] = next_id + 1
-
             pk_value = getattr(instance, pk_field)
             if pk_value is None:
-                raise ValueError(
-                    f"Cannot insert {self.model_cls.__name__} without a primary key value"
-                )
+                if pk_meta.autoincrement:
+                    pk_value = state.get("next_id", 1)
+                    setattr(instance, pk_field, pk_value)
+                    state["next_id"] = pk_value + 1
+                else:
+                    raise ValueError(
+                        f"Cannot insert {self.model_cls.__name__} without a primary key value"
+                    )
+            elif pk_meta.autoincrement and isinstance(pk_value, int):
+                # Explicit id: keep the counter ahead to avoid future collisions.
+                state["next_id"] = max(state.get("next_id", 1), pk_value + 1)
+
             if self._find_index(rows, pk_value) >= 0:
                 from .exceptions import UniqueConstraintError as _UCE
 
@@ -224,15 +228,18 @@ class Table(Generic[T]):
             pk_meta = self.schema.primary_key
             result: list[T] = []
             for instance in instances:
-                if getattr(instance, pk_field) is None and pk_meta.autoincrement:
-                    next_id = state.get("next_id", 1)
-                    setattr(instance, pk_field, next_id)
-                    state["next_id"] = next_id + 1
                 pk_value = getattr(instance, pk_field)
                 if pk_value is None:
-                    raise ValueError(
-                        f"Cannot insert {self.model_cls.__name__} without a primary key value"
-                    )
+                    if pk_meta.autoincrement:
+                        pk_value = state.get("next_id", 1)
+                        setattr(instance, pk_field, pk_value)
+                        state["next_id"] = pk_value + 1
+                    else:
+                        raise ValueError(
+                            f"Cannot insert {self.model_cls.__name__} without a primary key value"
+                        )
+                elif pk_meta.autoincrement and isinstance(pk_value, int):
+                    state["next_id"] = max(state.get("next_id", 1), pk_value + 1)
                 if self._find_index(rows, pk_value) >= 0:
                     raise UniqueConstraintError(self.schema.name, pk_field, pk_value)
                 self._check_unique(rows, instance)
