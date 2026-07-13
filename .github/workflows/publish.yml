@@ -1,0 +1,91 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Verify tag matches project version
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Tag is `v0.1.0` — strip the leading `v` to get the PEP 440 version.
+          VERSION="${TAG#v}"
+          # PEP 440 validation via packaging (shipped with uv's Python).
+          uv run --no-project python -c "import sys, json, pathlib, tomllib; \
+            v = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']; \
+            assert v == '$VERSION', f'tag {TAG!r} does not match pyproject.toml version {v!r}'; \
+            print(f'version={v}')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build wheel and sdist
+        run: uv build # writes ./dist/<name>-<version>-py3-none-any.whl and .tar.gz
+
+      - name: Smoke test (wheel)
+        run: >
+          uv run --isolated --no-project --with dist/*.whl python -c
+          "import tinystore; assert tinystore.__version__ == '${{ steps.meta.outputs.version }}'; print('wheel ok')"
+
+      - name: Smoke test (sdist)
+        run: >
+          uv run --isolated --no-project --with dist/*.tar.gz python -c
+          "import tinystore; print('sdist ok')"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # The `pypi` environment is required for Trusted Publishing and lets you
+    # gate releases with required reviewers / deployment branches.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tinystore/
+    permissions:
+      id-token: write # OIDC Trusted Publishing — no API token.
+      contents: read
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        run: uv publish --publish-url https://upload.pypi.org/legacy/
