@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .exceptions import DoesNotExist, ForeignKeyError, StaleDataError, UniqueConstraintError
+from .indexes import IndexManager
 from .serialization import EMPTY_TABLE, model_to_row, row_to_model
 
 if TYPE_CHECKING:
@@ -47,10 +48,13 @@ class Table(Generic[T]):
         self.model_cls = model_cls
         self.schema = model_cls.__tinysql_schema__
         self.exclude = model_cls.__tinysql_relationship_fields__
+        self.index = IndexManager(self.schema)
 
     # ---- internal helpers ----
     def _read_state(self) -> dict[str, Any]:
-        return self.db._read_table_state(self.schema.name)
+        state = self.db._read_table_state(self.schema.name)
+        self.index.ensure(state.get("rows", []))
+        return state
 
     def _write_state(self, data: dict[str, Any]) -> None:
         self.db._write_table_state(self.schema.name, data)
@@ -65,7 +69,11 @@ class Table(Generic[T]):
         return model_to_row(instance, exclude=self.exclude)
 
     def _find_index(self, rows: list[dict[str, Any]], pk: object) -> int:
+        """Find the row index for *pk*, using the PK index when available."""
         pk_field = self._pk_field()
+        indexed = self.index.lookup(pk_field, pk)
+        if indexed is not None:
+            return indexed[0] if indexed else -1
         for i, row in enumerate(rows):
             if row.get(pk_field) == pk:
                 return i
@@ -77,15 +85,25 @@ class Table(Generic[T]):
         instance: T,
         exclude_pk: object | None = None,
     ) -> None:
+        pk_field = self._pk_field()
         for field in self.schema.unique_fields:
             value = getattr(instance, field.name)
             if value is None and field.nullable:
                 continue
-            for row in rows:
-                if exclude_pk is not None and row.get(self._pk_field()) == exclude_pk:
-                    continue
-                if row.get(field.name) == value:
+            # Fast path: use the index if this field is indexed (unique fields
+            # always are).
+            indexed = self.index.lookup(field.name, value)
+            if indexed is not None:
+                for i in indexed:
+                    if exclude_pk is not None and rows[i].get(pk_field) == exclude_pk:
+                        continue
                     raise UniqueConstraintError(self.schema.name, field.name, value)
+            else:
+                for row in rows:
+                    if exclude_pk is not None and row.get(pk_field) == exclude_pk:
+                        continue
+                    if row.get(field.name) == value:
+                        raise UniqueConstraintError(self.schema.name, field.name, value)
 
     def _check_foreign_keys(self, instance: T) -> None:
         """Validate that every non-null FK on ``instance`` points to an existing row."""
@@ -263,7 +281,11 @@ class Table(Generic[T]):
     def get_by(self, field: str, value: object) -> T:
         with self.db.lock():
             rows = self._read_state()["rows"]
-            matches = [r for r in rows if r.get(field) == value]
+            indexed = self.index.lookup(field, value)
+            if indexed is not None:
+                matches = [rows[i] for i in indexed]
+            else:
+                matches = [r for r in rows if r.get(field) == value]
             if not matches:
                 raise DoesNotExist(
                     f"{self.model_cls.__name__} where {field}={value!r} does not exist"
@@ -285,6 +307,9 @@ class Table(Generic[T]):
     def find(self, field: str, value: object) -> list[T]:
         with self.db.lock():
             rows = self._read_state()["rows"]
+            indexed = self.index.lookup(field, value)
+            if indexed is not None:
+                return [self._decode(rows[i]) for i in indexed]
             return [self._decode(r) for r in rows if r.get(field) == value]
 
     def update(self, instance: T) -> T:

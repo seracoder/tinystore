@@ -89,13 +89,22 @@ class SelectQuery:
     # ---- materialization ----
     def _rows(self) -> list[dict[str, Any]]:
         with self.db.lock():
+            table = self.db.table(self.model_cls)
             rows = list(
                 cast(
                     list[dict[str, Any]],
                     self.db._read_table_state(self.schema.name).get("rows", []),
                 )
             )
+            # Ensure index is built for the current rows.
+            table.index.ensure(rows)
+
             if self._where:
+                # Optimization: extract eq/in conditions on indexed fields and
+                # narrow candidates via the index before applying full predicates.
+                candidates = _index_narrow(table.index, rows, self._where)
+                if candidates is not None:
+                    rows = candidates
                 combined = _AndAll(self._where)
                 rows = [r for r in rows if combined.matches(r)]
             # ordering (stable; apply in reverse for stable multi-key)
@@ -205,3 +214,53 @@ class _AndAll(Expression):
 
     def matches(self, row: dict[str, Any]) -> bool:
         return all(e.matches(row) for e in self.exprs)
+
+
+def _index_narrow(
+    index: Any,
+    rows: list[dict[str, Any]],
+    where: list[Expression],
+) -> list[dict[str, Any]] | None:
+    """Narrow candidate rows using eq/in conditions on indexed fields.
+
+    Scans top-level where expressions for ``Comparison(eq)`` or ``In`` on
+    indexed fields, intersects the matching row indices, and returns the
+    narrowed candidate list.  Returns ``None`` when no index optimization
+    applies (caller falls back to a full scan + predicate evaluation).
+    """
+    from .expressions import And, Comparison, In, Or
+
+    candidate_sets: list[set[int]] = []
+
+    def _extract(expr: Expression) -> None:
+        if isinstance(expr, Comparison) and expr.op == "eq" and index.has_index(expr.field):
+            indices = index.lookup(expr.field, expr.value)
+            if indices is not None:
+                candidate_sets.append(set(indices))
+        elif isinstance(expr, In) and index.has_index(expr.field):
+            indices = index.lookup_many(expr.field, expr.values)
+            if indices is not None:
+                candidate_sets.append(set(indices))
+        elif isinstance(expr, And):
+            for sub in expr.exprs:
+                _extract(sub)
+
+    for expr in where:
+        if isinstance(expr, Or):
+            continue  # can't safely narrow OR branches
+        _extract(expr)
+
+    if not candidate_sets:
+        return None
+
+    # Intersect all candidate sets (AND semantics).
+    result_set = candidate_sets[0]
+    for cs in candidate_sets[1:]:
+        result_set &= cs
+
+    if not result_set:
+        # Empty intersection: fall back to full scan so that predicate
+        # evaluation still runs (e.g. to raise strict type-mismatch errors).
+        return None
+
+    return [rows[i] for i in sorted(result_set)]
