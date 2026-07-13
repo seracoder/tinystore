@@ -82,12 +82,7 @@ def main() -> None:
     # ---- Join: users + their posts ===
 
     print("\n=== Join: users and posts ===")
-    rows = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .order_by(User.name)
-        .all()
-    )
+    rows = db.select(User).join(Post, on=Post.author_id == User.id).order_by(User.name).all()
     for r in rows:
         print(f"  {r.user.name} wrote '{r.post.title}'")
 

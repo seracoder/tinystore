@@ -64,10 +64,14 @@ def test_recovery_replays_leftover_journal(db_path: Path) -> None:
     journal = {
         "txid": "0000000001",
         "tables": {
-            "users": {"next_id": 3, "rows": [
-                {"id": 1, "name": "Alice", "email": "a@x.com", "__version": 1},
-                {"id": 2, "name": "Bob", "email": "b@x.com", "__version": 1},
-            ], "version": 1}
+            "users": {
+                "next_id": 3,
+                "rows": [
+                    {"id": 1, "name": "Alice", "email": "a@x.com", "__version": 1},
+                    {"id": 2, "name": "Bob", "email": "b@x.com", "__version": 1},
+                ],
+                "version": 1,
+            }
         },
     }
     (d.storage.journal_dir / "0000000001.json").write_text(dumps(journal), encoding="utf-8")
@@ -88,12 +92,20 @@ def test_recovery_partial_apply_finishes(db_path: Path) -> None:
     journal = {
         "txid": "0000000007",
         "tables": {
-            "users": {"next_id": 2, "rows": [
-                {"id": 1, "name": "Alice", "email": "a@x.com", "__version": 1},
-            ], "version": 1},
-            "posts": {"next_id": 11, "rows": [
-                {"id": 10, "title": "Hi", "author_id": 1, "__version": 1},
-            ], "version": 1},
+            "users": {
+                "next_id": 2,
+                "rows": [
+                    {"id": 1, "name": "Alice", "email": "a@x.com", "__version": 1},
+                ],
+                "version": 1,
+            },
+            "posts": {
+                "next_id": 11,
+                "rows": [
+                    {"id": 10, "title": "Hi", "author_id": 1, "__version": 1},
+                ],
+                "version": 1,
+            },
         },
     }
     # Apply ONLY users (as if the process died before writing posts).
@@ -119,9 +131,13 @@ def test_recovery_multiple_journals_in_order(db_path: Path) -> None:
         journal = {
             "txid": txid,
             "tables": {
-                "users": {"next_id": 2, "rows": [
-                    {"id": 1, "name": name, "email": f"{name.lower()}@x.com", "__version": 1},
-                ], "version": 1}
+                "users": {
+                    "next_id": 2,
+                    "rows": [
+                        {"id": 1, "name": name, "email": f"{name.lower()}@x.com", "__version": 1},
+                    ],
+                    "version": 1,
+                }
             },
         }
         (d.storage.journal_dir / f"{txid}.json").write_text(dumps(journal), encoding="utf-8")

@@ -111,7 +111,9 @@ def test_not(populated_db: Database, user_model) -> None:
 def test_complex_precedence(populated_db: Database, user_model) -> None:
     r = (
         populated_db.select(user_model)
-        .where((user_model.age >= 18) & ((user_model.country == "BD") | (user_model.country == "US")))
+        .where(
+            (user_model.age >= 18) & ((user_model.country == "BD") | (user_model.country == "US"))
+        )
         .order_by(user_model.name)
         .limit(20)
         .all()
@@ -181,7 +183,9 @@ def test_strict_type_mismatch_raises(populated_db: Database, user_model) -> None
         populated_db.select(user_model).where(user_model.age == "thirty").all()
 
 
-def test_ordering_against_none_returns_false(registered_db: Database, user_model, make_user) -> None:
+def test_ordering_against_none_returns_false(
+    registered_db: Database, user_model, make_user
+) -> None:
     registered_db.insert(make_user(name="NoAge", email="a@x.com", age=None))
     r = registered_db.select(user_model).where(user_model.age > 10).all()
     assert r == []

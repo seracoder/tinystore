@@ -32,16 +32,12 @@ class Comment(Model):
 class Tag(Model):
     id: int | None = Field(default=None, primary_key=True)
     name: str
-    alt_author_id: int | None = Field(
-        default=None, foreign_key="authors.id", on_delete="SET_NULL"
-    )
+    alt_author_id: int | None = Field(default=None, foreign_key="authors.id", on_delete="SET_NULL")
 
 
 class Node(Model):
     id: int | None = Field(default=None, primary_key=True)
-    parent_id: int | None = Field(
-        default=None, foreign_key="nodes.id", on_delete="CASCADE"
-    )
+    parent_id: int | None = Field(default=None, foreign_key="nodes.id", on_delete="CASCADE")
 
 
 @pytest.fixture

@@ -293,9 +293,7 @@ class Database:
         schema = model_cls.__tinystore_schema__
         rel = next((r for r in schema.relationships if r[0] == name), None)
         if rel is None:
-            raise RelationshipError(
-                f"{model_cls.__name__} has no relationship named {name!r}"
-            )
+            raise RelationshipError(f"{model_cls.__name__} has no relationship named {name!r}")
         fk_field_name = rel[1]
 
         local_field = schema.field(fk_field_name)
@@ -303,9 +301,7 @@ class Database:
             return self._load_related_one(obj, fk_field_name, local_field.foreign_key)
         return self._load_related_many(obj, schema, fk_field_name)
 
-    def _load_related_one(
-        self, obj: Model, fk_field_name: str, fk_ref: str
-    ) -> Model | None:
+    def _load_related_one(self, obj: Model, fk_field_name: str, fk_ref: str) -> Model | None:
         ref_table, ref_column = _parse_fk(fk_ref)
         fk_value = getattr(obj, fk_field_name)
         if fk_value is None:
@@ -313,8 +309,7 @@ class Database:
         target_cls = self._registry.get(ref_table)
         if target_cls is None:
             raise RelationshipError(
-                f"Relationship via {fk_field_name!r} targets unregistered table "
-                f"{ref_table!r}"
+                f"Relationship via {fk_field_name!r} targets unregistered table {ref_table!r}"
             )
         matches = self.table(target_cls).find(ref_column, fk_value)
         return matches[0] if matches else None

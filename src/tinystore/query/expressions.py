@@ -273,19 +273,14 @@ class JoinCondition:
 
     __slots__ = ("a_field", "a_model", "b_field", "b_model")
 
-    def __init__(
-        self, a_model: Any, a_field: str, b_model: Any, b_field: str
-    ) -> None:
+    def __init__(self, a_model: Any, a_field: str, b_model: Any, b_field: str) -> None:
         self.a_model = a_model
         self.a_field = a_field
         self.b_model = b_model
         self.b_field = b_field
 
     def __repr__(self) -> str:
-        return (
-            f"{self.a_model.__name__}.{self.a_field} == "
-            f"{self.b_model.__name__}.{self.b_field}"
-        )
+        return f"{self.a_model.__name__}.{self.a_field} == {self.b_model.__name__}.{self.b_field}"
 
 
 class FieldProxy:

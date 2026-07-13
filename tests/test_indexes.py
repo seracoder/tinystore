@@ -105,9 +105,7 @@ def test_query_multiple_indexed_conditions(db: Database) -> None:
     for i in range(20):
         cat = "tools" if i % 2 == 0 else "books"
         db.insert(Item(id=i, sku=f"S{i}", category=cat, name="Same", price=float(i)))
-    result = db.select(Item).where(
-        Item.category == "tools", Item.name == "Same"
-    ).all()
+    result = db.select(Item).where(Item.category == "tools", Item.name == "Same").all()
     assert len(result) == 10
     assert all(r.category == "tools" for r in result)
 

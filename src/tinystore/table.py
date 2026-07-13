@@ -179,8 +179,7 @@ class Table(Generic[T]):
             if on_delete == "SET_NULL":
                 if not _fk_accepts_null(dep_schema, fk.name):
                     raise ForeignKeyError(
-                        f"Cannot SET_NULL on {dep_schema.name}.{fk.name}: "
-                        "field is not nullable"
+                        f"Cannot SET_NULL on {dep_schema.name}.{fk.name}: field is not nullable"
                     )
                 for row in rows:
                     if row.get(fk.name) == pk_value:
@@ -196,8 +195,7 @@ class Table(Generic[T]):
                         self._cascade_delete(dep_schema.name, child_pk, visited)
             else:
                 raise ForeignKeyError(
-                    f"Unknown on_delete policy {on_delete!r} on "
-                    f"{dep_schema.name}.{fk.name}"
+                    f"Unknown on_delete policy {on_delete!r} on {dep_schema.name}.{fk.name}"
                 )
 
     # ---- public CRUD ----

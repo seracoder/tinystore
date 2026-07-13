@@ -76,8 +76,7 @@ class Row:
 
     def __repr__(self) -> str:
         parts = ", ".join(
-            f"{m.__name__.lower()}={v!r}"
-            for m, v in zip(self._models, self._values, strict=True)
+            f"{m.__name__.lower()}={v!r}" for m, v in zip(self._models, self._values, strict=True)
         )
         return f"Row({parts})"
 
@@ -116,13 +115,11 @@ class JoinQuery:
             raise QueryError(f"Unsupported join kind {kind!r}; use 'inner' or 'left'")
         if not isinstance(on, JoinCondition):
             raise QueryError(
-                "join(on=...) must be a cross-model condition like "
-                "Post.author_id == User.id"
+                "join(on=...) must be a cross-model condition like Post.author_id == User.id"
             )
         if on.a_model is not model and on.b_model is not model:
             raise QueryError(
-                f"join condition {on!r} does not reference the joined model "
-                f"{model.__name__!r}"
+                f"join condition {on!r} does not reference the joined model {model.__name__!r}"
             )
         other = on.b_model if on.a_model is model else on.a_model
         if other not in self._models:
@@ -149,9 +146,7 @@ class JoinQuery:
         if model is None:
             model = self._models[0]
         if model not in self._models:
-            raise QueryError(
-                f"order_by references {model.__name__!r} which is not in the query"
-            )
+            raise QueryError(f"order_by references {model.__name__!r} which is not in the query")
         self._order.append((model, name, desc))
         return self
 
@@ -264,9 +259,7 @@ class JoinQuery:
         if not rows:
             raise DoesNotExist("join query returned no rows")
         if len(rows) > 1:
-            raise MultipleObjectsReturned(
-                f"join query returned {len(rows)} rows; expected one"
-            )
+            raise MultipleObjectsReturned(f"join query returned {len(rows)} rows; expected one")
         return rows[0]
 
     def one_or_none(self) -> Row | None:
@@ -279,9 +272,7 @@ class JoinQuery:
         if not rows:
             return None
         if len(rows) > 1:
-            raise MultipleObjectsReturned(
-                f"join query returned {len(rows)} rows; expected one"
-            )
+            raise MultipleObjectsReturned(f"join query returned {len(rows)} rows; expected one")
         return rows[0]
 
     def count(self) -> int:
@@ -320,9 +311,7 @@ def _cond_satisfied(
     return new_row.get(new_field) == other_row.get(other_field)
 
 
-def _expr_matches(
-    expr: Any, row_map: dict[type[Model], dict[str, Any] | None]
-) -> bool:
+def _expr_matches(expr: Any, row_map: dict[type[Model], dict[str, Any] | None]) -> bool:
     if isinstance(expr, And):
         return all(_expr_matches(e, row_map) for e in expr.exprs)
     if isinstance(expr, Or):
@@ -332,8 +321,7 @@ def _expr_matches(
     model = getattr(expr, "model", None)
     if model is None:
         raise QueryError(
-            "join where() expressions must reference a model field, e.g. "
-            "User.name == 'Alice'"
+            "join where() expressions must reference a model field, e.g. User.name == 'Alice'"
         )
     row = row_map.get(model)
     if row is None:

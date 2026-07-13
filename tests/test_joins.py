@@ -75,11 +75,7 @@ def test_inner_join_one_to_many_duplicates(db: Database) -> None:
 
 # ---- LEFT join ----
 def test_left_join_unmatched_right_is_none(db: Database) -> None:
-    rows = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id, kind="left")
-        .all()
-    )
+    rows = db.select(User).join(Post, on=Post.author_id == User.id, kind="left").all()
     by_user: dict[str, list[Row]] = {}
     for r in rows:
         by_user.setdefault(r.user.name, []).append(r)
@@ -93,11 +89,7 @@ def test_left_join_unmatched_right_is_none(db: Database) -> None:
 
 def test_left_join_with_user_having_no_posts(db: Database) -> None:
     db.insert(User(id=3, name="Carol"))
-    rows = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id, kind="left")
-        .all()
-    )
+    rows = db.select(User).join(Post, on=Post.author_id == User.id, kind="left").all()
     carol = [r for r in rows if r.user.name == "Carol"]
     assert len(carol) == 1
     assert carol[0].post is None
@@ -119,22 +111,14 @@ def test_join_where_order_limit(db: Database) -> None:
 
 
 def test_join_where_on_right_model(db: Database) -> None:
-    rows = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .where(Post.title == "B1")
-        .all()
-    )
+    rows = db.select(User).join(Post, on=Post.author_id == User.id).where(Post.title == "B1").all()
     assert len(rows) == 1
     assert rows[0].user.name == "Bob"
 
 
 def test_join_order_desc(db: Database) -> None:
     rows = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .order_by(Post.id, desc=True)
-        .all()
+        db.select(User).join(Post, on=Post.author_id == User.id).order_by(Post.id, desc=True).all()
     )
     ids = [r.post.id for r in rows]
     assert ids == sorted(ids, reverse=True)
@@ -158,12 +142,7 @@ def test_three_table_chain_join(db: Database) -> None:
 
 # ---- terminals ----
 def test_join_first(db: Database) -> None:
-    r = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .order_by(Post.id)
-        .first()
-    )
+    r = db.select(User).join(Post, on=Post.author_id == User.id).order_by(Post.id).first()
     assert r is not None
     assert r.post.id == 10
 
@@ -180,32 +159,17 @@ def test_join_first_empty(db: Database) -> None:
 
 
 def test_join_one(db: Database) -> None:
-    r = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .where(Post.title == "B1")
-        .one()
-    )
+    r = db.select(User).join(Post, on=Post.author_id == User.id).where(Post.title == "B1").one()
     assert r.user.name == "Bob"
 
 
 def test_join_one_raises_on_multiple(db: Database) -> None:
     with pytest.raises(MultipleObjectsReturned):
-        (
-            db.select(User)
-            .join(Post, on=Post.author_id == User.id)
-            .where(User.name == "Alice")
-            .one()
-        )
+        (db.select(User).join(Post, on=Post.author_id == User.id).where(User.name == "Alice").one())
 
 
 def test_join_count(db: Database) -> None:
-    n = (
-        db.select(User)
-        .join(Post, on=Post.author_id == User.id)
-        .where(User.name == "Alice")
-        .count()
-    )
+    n = db.select(User).join(Post, on=Post.author_id == User.id).where(User.name == "Alice").count()
     assert n == 2
 
 
@@ -229,11 +193,6 @@ def test_join_missing_intermediate_model(db: Database) -> None:
 
 
 def test_join_reversed_condition_works(db: Database) -> None:
-    rows = (
-        db.select(User)
-        .join(Post, on=User.id == Post.author_id)
-        .where(User.name == "Bob")
-        .all()
-    )
+    rows = db.select(User).join(Post, on=User.id == Post.author_id).where(User.name == "Bob").all()
     assert len(rows) == 1
     assert rows[0].post.title == "B1"

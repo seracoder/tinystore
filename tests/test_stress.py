@@ -26,8 +26,7 @@ def big_db(db_path: Path) -> Database:
 def test_bulk_insert_10k_rows(big_db: Database) -> None:
     """insert_many of 10k rows should complete and set correct next_id."""
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
     assert big_db.count(Record) == 10_000
@@ -37,8 +36,7 @@ def test_bulk_insert_10k_rows(big_db: Database) -> None:
 def test_indexed_query_on_10k_rows(big_db: Database) -> None:
     """eq on an indexed field should find the right row quickly."""
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
 
@@ -49,8 +47,7 @@ def test_indexed_query_on_10k_rows(big_db: Database) -> None:
 
 def test_unique_lookup_on_10k_rows(big_db: Database) -> None:
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
 
@@ -60,8 +57,7 @@ def test_unique_lookup_on_10k_rows(big_db: Database) -> None:
 
 def test_pagination_on_10k_rows(big_db: Database) -> None:
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
 
@@ -75,23 +71,17 @@ def test_pagination_on_10k_rows(big_db: Database) -> None:
 def test_mixed_indexed_and_non_indexed_query(big_db: Database) -> None:
     """Multiple conditions: indexed + non-indexed should still work."""
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
 
-    result = (
-        big_db.select(Record)
-        .where(Record.category == "cat_5", Record.value > 9000)
-        .all()
-    )
+    result = big_db.select(Record).where(Record.category == "cat_5", Record.value > 9000).all()
     assert all(r.category == "cat_5" and r.value > 9000 for r in result)
 
 
 def test_check_passes_on_large_db(big_db: Database) -> None:
     records = [
-        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}")
-        for i in range(10_000)
+        Record(id=i, category=f"cat_{i % 100}", value=i, name=f"name_{i}") for i in range(10_000)
     ]
     big_db.insert_many(records)
     assert big_db.check() == []
