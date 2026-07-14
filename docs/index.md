@@ -12,7 +12,7 @@ datasets — **not** for high-volume or high-concurrency workloads.
 
 ## Why TinyStore?
 
-- :material-file-json-outline: **JSON on disk.** Every table is a separate JSON file you can read,
+- :material-code-json: **JSON on disk.** Every table is a separate JSON file you can read,
     diff, and back up with any tool.
 - :material-shield-check: **Validated by Pydantic v2.** Data is coerced and validated on the way in
     and out — `ge=`, `min_length=`, custom types, the works.
@@ -68,4 +68,5 @@ young = (
 - New to TinyStore? Start with the **[Getting started](getting-started.md)**.
 - Learn by feature in the **[Guides](guides/index.md)**.
 - Browse every class, method, and exception in the **[API reference](api/index.md)**.
-- See it all together in the **[Blog app example](examples/blog-app.md)**.
+- See it all together in the **[Examples](examples/index.md)** — a blog app, a
+  task queue, a library catalog, and a contacts CLI.
